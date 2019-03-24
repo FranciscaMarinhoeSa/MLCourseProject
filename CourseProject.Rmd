@@ -1,0 +1,88 @@
+---
+title: "Course Project Machine Learning"
+author: "Francisca Marinho e Sá"
+date: "24th March 2019"
+output: html_document
+---
+
+```{r setoptions , echo = TRUE}
+knitr::opts_chunk$set(echo = TRUE, results = TRUE)
+```
+
+## Executive Summary
+The objective of this project is to use information from accelerometers on the belt, forearm, arm, and dumbell from six participants to predict how they did the excercise - the *class* variable.
+
+##Analysis
+###Data preparation
+First we need to import the datasets and the packages needed for this analysis.
+
+```{r , message=FALSE, warning=FALSE}
+training <- read.csv("pml-training.csv")
+validation <- read.csv("pml-testing.csv")
+library(caret)
+library(dplyr)
+library(stringr)
+set.seed(2403)
+```
+And then explore it.
+```{r , message=FALSE, warning=FALSE}
+dim(training)
+dim(validation)
+str(training)
+str(validation)
+unique(training$classe)
+```
+
+As we could see from the previous commands, there are many missing values that we need to remove and also some variables that won't be used in the prediction.
+```{r , message=FALSE, warning=FALSE}
+training_set <- training
+validation_set <- validation
+training_set[is.na(training_set)] <- 0
+validation_set[is.na(validation_set)] <- 0
+training_set <-training_set[,-c(1:7)]
+validation_set <-validation_set[,-c(1:7)]
+```
+
+First, we need to split the data for the prediction into training and testing sets.
+```{r , message=FALSE, warning=FALSE}
+Train_Set <- createDataPartition(training_set$classe, p=0.7, list = FALSE)
+set_training <- training_set[Train_Set,]
+set_testing <- training_set[Train_Set,]
+```
+
+We need to check if there are variables with near zero variance remove them.
+```{r , message=FALSE, warning=FALSE}
+nearzero <- nearZeroVar(set_training)
+set_training <- set_training[, -nearzero]
+set_testing <- set_testing[, -nearzero]
+dim(set_training)
+```
+
+To find the best variables to work with, we will use the correlation matrix and select the variables with the highest correletion (>0.75)
+```{r , message=FALSE, warning=FALSE}
+correlationMatrix <- cor(set_training[, c(1:52)])
+print(correlationMatrix)
+
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+print(names(set_training[highlyCorrelated]))
+
+set_training <- set_training[, c(names(set_training[highlyCorrelated]), "classe")] 
+set_testing <- set_testing[, names(set_training)] 
+```
+
+###Prediction Models
+For this analysis, will use the Random Forest algorithm.
+```{r , message=FALSE, warning=FALSE}
+crossValidationRF <- trainControl(method = "cv", verboseIter = FALSE)
+ClasseFitRF <- train(classe ~  ., method = "rf", data =set_training, trControl = crossValidationRF)
+ClassePredictRF <- predict(ClasseFitRF, set_testing) 
+ConfusionMatrix <- confusionMatrix(ClassePredictRF, set_testing$classe)
+ConfusionMatrix
+```
+
+The accuracy is 1 so we don't need to explore other models.
+
+Finally, we will implement the model on the validation set.
+```{r , message=FALSE, warning=FALSE}
+PredictValidation <- predict(ClasseFitRF, validation_set)
+```
